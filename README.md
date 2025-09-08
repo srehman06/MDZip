@@ -81,4 +81,4 @@ out (str) : Output trajectory file path with name. Use extention to define file 
 
 ## Cite
 
-Fill here
+doi : <https://doi.org/10.1101/2025.07.31.667955>
