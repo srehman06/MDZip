@@ -32,7 +32,7 @@ pip install lightning
 ```
 Install MolZip
 ```
-git clone https://github.com/nami-rangana/MolZip.git
+git clone https://github.com/PDNALab/MDZip.git
 cd MolZip
 python setup.py sdist bdist_wheel
 cd dist
