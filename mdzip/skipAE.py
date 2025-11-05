@@ -20,52 +20,57 @@ import torch
 import torch.nn as nn
 
 class AE(nn.Module):
-    def __init__(self, n_atoms:int, n_channels:int=4096, latent_dim:int=20):
+    def __init__(self, n_atoms:int, n_channels:int|None=None, latent_dim:int=20):
         super().__init__()
         self.n_atoms = n_atoms
         self.latent_dim = latent_dim
 
-        if self.n_atoms*3 < 1024:
-            self.n_channels = 1024
-        elif self.n_atoms*3 < 2048:
-            self.n_channels = 2048
+        if n_channels is None:
+            if self.n_atoms*3 < 1024:
+                self.n_channels = 1024
+            elif self.n_atoms*3 < 2048:
+                self.n_channels = 2048
+            else:
+                self.n_channels = 4096
         else:
             self.n_channels = n_channels
+        
+        C = self.n_channels
 
         self.encoder1 = nn.Sequential(
-            nn.Conv2d(1, self.n_channels, kernel_size=(n_atoms,1), bias=True),
-            nn.BatchNorm2d(self.n_channels),
+            nn.Conv2d(1, C, kernel_size=(n_atoms,1), bias=True),
+            nn.BatchNorm2d(C),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(self.n_channels, self.n_channels//2, kernel_size=(1,3), bias=True),
-            nn.BatchNorm2d(self.n_channels//2),
+            nn.Conv2d(C, C//2, kernel_size=(1,3), bias=True),
+            nn.BatchNorm2d(C//2),
             nn.LeakyReLU(0.2, inplace=True)
         )
         self.encoderSkip1 = nn.Sequential(
-            nn.Conv2d(1, self.n_channels//2, kernel_size=(n_atoms,3), bias=True),
-            nn.BatchNorm2d(self.n_channels//2),
+            nn.Conv2d(1, C//2, kernel_size=(n_atoms,3), bias=True),
+            nn.BatchNorm2d(C//2),
             nn.ReLU(inplace=True)
         )
         
         self.fuseE1 = nn.Sequential(
-            nn.Conv2d(self.n_channels//2 * 2, self.n_channels//2, kernel_size=1),
-            nn.BatchNorm2d(self.n_channels//2),
+            nn.Conv2d(C//2 * 2, C//2, kernel_size=1),
+            nn.BatchNorm2d(C//2),
             nn.LeakyReLU(0.2)
         )
 
         self.encoder2 = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(self.n_channels//2, self.n_channels//4),
-            nn.BatchNorm1d(self.n_channels//4),
+            nn.Linear(C//2, C//4),
+            nn.BatchNorm1d(C//4),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(self.n_channels//4, self.n_channels//8),
-            nn.BatchNorm1d(self.n_channels//8),
+            nn.Linear(C//4, C//8),
+            nn.BatchNorm1d(C//8),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(self.n_channels//8, latent_dim),
+            nn.Linear(C//8, latent_dim),
             nn.BatchNorm1d(latent_dim)
         )
         self.encoderSkip2 = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(self.n_channels//2, latent_dim),
+            nn.Linear(C//2, latent_dim),
             nn.BatchNorm1d(latent_dim)
         )
         
@@ -77,38 +82,38 @@ class AE(nn.Module):
         self.encoderReLU = nn.ReLU(inplace=True)
 
         self.decoder1 = nn.Sequential(
-            nn.Linear(latent_dim, self.n_channels//8),
-            nn.BatchNorm1d(self.n_channels//8),
+            nn.Linear(latent_dim, C//8),
+            nn.BatchNorm1d(C//8),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(self.n_channels//8, self.n_channels//4),
-            nn.BatchNorm1d(self.n_channels//4),
+            nn.Linear(C//8, C//4),
+            nn.BatchNorm1d(C//4),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(self.n_channels//4, self.n_channels//2),
-            nn.BatchNorm1d(self.n_channels//2),
+            nn.Linear(C//4, C//2),
+            nn.BatchNorm1d(C//2),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Unflatten(1, (self.n_channels//2,1,1))
+            nn.Unflatten(1, (C//2,1,1))
         )
         self.decoderSkip1 = nn.Sequential(
-            nn.Linear(latent_dim, self.n_channels//2),
-            nn.BatchNorm1d(self.n_channels//2),
+            nn.Linear(latent_dim, C//2),
+            nn.BatchNorm1d(C//2),
             nn.ReLU(inplace=True),
-            nn.Unflatten(1, (self.n_channels//2,1,1))
+            nn.Unflatten(1, (C//2,1,1))
         )
         
         self.fuseD1 = nn.Sequential(
-            nn.Conv2d(self.n_channels//2 * 2, self.n_channels//2, kernel_size=1),
-            nn.BatchNorm2d(self.n_channels//2),
+            nn.Conv2d(C//2 * 2, C//2, kernel_size=1),
+            nn.BatchNorm2d(C//2),
             nn.LeakyReLU(0.2)
         )
 
         self.decoder2 = nn.Sequential(
-            nn.ConvTranspose2d(self.n_channels//2, self.n_channels, kernel_size=(1,3), bias=True),
-            nn.BatchNorm2d(self.n_channels),
+            nn.ConvTranspose2d(C//2, C, kernel_size=(1,3), bias=True),
+            nn.BatchNorm2d(C),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.ConvTranspose2d(self.n_channels, 1, kernel_size=(n_atoms,1), bias=True)
+            nn.ConvTranspose2d(C, 1, kernel_size=(n_atoms,1), bias=True)
         )
         self.decoderSkip2 = nn.Sequential(
-            nn.ConvTranspose2d(self.n_channels//2, 1, kernel_size=(n_atoms,3), bias=True),
+            nn.ConvTranspose2d(C//2, 1, kernel_size=(n_atoms,3), bias=True),
             nn.BatchNorm2d(1)
         )
         

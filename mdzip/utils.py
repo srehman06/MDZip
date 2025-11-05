@@ -158,3 +158,21 @@ def get_cluster(cluster):
                 break
     
     return cluster_assignments
+
+def compress_model(model):
+    from torch.ao.quantization import quantize_dynamic
+    
+    model.eval()
+    return quantize_dynamic(model, {torch.nn.Linear}, dtype=torch.qint8) 
+    
+
+def save_compressed_model(lightning_model, path):
+    """
+    Save only the inner AE weights, not the entire Lightning checkpoint.
+    """
+    core = lightning_model.model
+    model = compress_model(core)
+
+    # Save state_dict only (smallest possible)
+    torch.save(model.state_dict(), path)
+

@@ -17,7 +17,7 @@ class Loss(nn.Module):
         return torch.sqrt(torch.mean((recon - x) ** 2))
         
 class AE(nn.Module):
-    def __init__(self, n_atoms:int, n_channels:int=4096, latent_dim:int=20):
+    def __init__(self, n_atoms:int, n_channels:int|None=None, latent_dim:int=20):
         r'''
 pytorch-Lightning AutoEncoder
 -----------------------------
@@ -30,67 +30,72 @@ n_channels (int) : number of channels in the first convolution layer [Default=40
         self.n_atoms = n_atoms
         self.latent_dim = latent_dim
         
-        if self.n_atoms*3 < 1024:
-            self.n_channels = 1024
-        elif self.n_atoms*3 < 2048:
-            self.n_channels = 2048
+        if n_channels is None:
+            if self.n_atoms*3 < 1024:
+                self.n_channels = 1024
+            elif self.n_atoms*3 < 2048:
+                self.n_channels = 2048
+            else:
+                self.n_channels = 4096
         else:
             self.n_channels = n_channels
-            
+        
+        C = self.n_channels
+        
         self.encoder = nn.Sequential(
             ##(N,1,n_atoms,03)
-            nn.Conv2d(1,n_channels,kernel_size=(n_atoms,1), bias=True), #(N,n_channels,1,3)
-            nn.BatchNorm2d(n_channels),
+            nn.Conv2d(1,C,kernel_size=(n_atoms,1), bias=True), #(N,C,1,3)
+            nn.BatchNorm2d(C),
             # nn.Dropout2d(0.1),
             nn.LeakyReLU(0.2, inplace=True),
             
-            nn.Conv2d(n_channels,n_channels//2,kernel_size=(1,3), bias=True), #(N,n_channels/2,1,1)
-            nn.BatchNorm2d(n_channels//2),
+            nn.Conv2d(C,C//2,kernel_size=(1,3), bias=True), #(N,C/2,1,1)
+            nn.BatchNorm2d(C//2),
             # nn.Dropout2d(0.1),
             nn.LeakyReLU(0.2, inplace=True),
             
-            nn.Flatten(), #(N,n_channels/2)
+            nn.Flatten(), #(N,C/2)
             
-            nn.Linear(n_channels//2, n_channels//4), #(N,n_channels/4)
-            nn.BatchNorm1d(n_channels//4),
+            nn.Linear(C//2, C//4), #(N,C/4)
+            nn.BatchNorm1d(C//4),
             # nn.Dropout(0.1),
             nn.LeakyReLU(0.2, inplace=True),
 
-            nn.Linear(n_channels//4, n_channels//8), #(N,n_channels/8)
-            nn.BatchNorm1d(n_channels//8),
+            nn.Linear(C//4, C//8), #(N,C/8)
+            nn.BatchNorm1d(C//8),
             # nn.Dropout(0.1),
             nn.LeakyReLU(0.2, inplace=True),
 
-            nn.Linear(n_channels//8, latent_dim), #(N,latent_dim)
+            nn.Linear(C//8, latent_dim), #(N,latent_dim)
             nn.BatchNorm1d(latent_dim),
             nn.LeakyReLU(0.2, inplace=True)
         )
             
         self.decoder = nn.Sequential(
             #(N,latent_dim)
-            nn.Linear(latent_dim, n_channels//8), #(N,n_channels/8)
-            nn.BatchNorm1d(n_channels//8),
+            nn.Linear(latent_dim, C//8), #(N,C/8)
+            nn.BatchNorm1d(C//8),
             # nn.Dropout(0.1),
             nn.LeakyReLU(0.2, inplace=True),
 
-            nn.Linear(n_channels//8, n_channels//4), #(N,n_channels/4)
-            nn.BatchNorm1d(n_channels//4),
+            nn.Linear(C//8, C//4), #(N,C/4)
+            nn.BatchNorm1d(C//4),
             # nn.Dropout(0.1),
             nn.LeakyReLU(0.2, inplace=True),
             
-            nn.Linear(n_channels//4, n_channels//2), #(N,n_channels/2)
-            nn.BatchNorm1d(n_channels//2),
+            nn.Linear(C//4, C//2), #(N,C/2)
+            nn.BatchNorm1d(C//2),
             # nn.Dropout(0.1),
             nn.LeakyReLU(0.2, inplace=True),
             
-            nn.Unflatten(1,(n_channels//2,1,1)), # (N,n_channels/2,1,1)
+            nn.Unflatten(1,(C//2,1,1)), # (N,C/2,1,1)
         
-            nn.ConvTranspose2d(n_channels//2,n_channels,kernel_size=(1,3), bias=True), #(N,n_channels,1,3)
-            nn.BatchNorm2d(n_channels),
+            nn.ConvTranspose2d(C//2,C,kernel_size=(1,3), bias=True), #(N,C,1,3)
+            nn.BatchNorm2d(C),
             # nn.Dropout2d(0.1),
             nn.LeakyReLU(0.2, inplace=True),
             
-            nn.ConvTranspose2d(n_channels, 1, kernel_size=(n_atoms,1), bias=True), #(N, 1, n_atoms, 3)
+            nn.ConvTranspose2d(C, 1, kernel_size=(n_atoms,1), bias=True), #(N, 1, n_atoms, 3)
             nn.Sigmoid()  # Sigmoid activation for output
         )
     
