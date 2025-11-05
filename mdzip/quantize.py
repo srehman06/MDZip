@@ -171,3 +171,19 @@ def load_lightae_int8(path, model_type: str, device="cpu", loss_path=None, lr=1e
     light = LightAECls(model=ae, lr=lr, loss_path=(loss_path or os.path.join(os.getcwd(), "losses.dat")))
     light.to(device).eval()
     return light
+
+def _inspect_ckpt(ckpt_path):
+    ckpt = torch.load(ckpt_path, map_location="cpu")
+    sd = ckpt["state_dict"]
+    is_skip = any(k.startswith("model.encoder1.") for k in sd.keys())
+    if is_skip:
+        arch = "skipAE"
+        W0 = sd["model.encoder1.0.weight"]     # (C, 1, n_atoms, 1)
+        C = W0.shape[0]; n_atoms_conv = W0.shape[2]
+        latent_dim = sd["model.decoder1.0.weight"].shape[1]
+    else:
+        arch = "AE"
+        W0 = sd["model.encoder.0.weight"]       # (C, 1, n_atoms, 1)
+        C = W0.shape[0]; n_atoms_conv = W0.shape[2]
+        latent_dim = sd["model.decoder.0.weight"].shape[1]
+    return arch, int(C), int(latent_dim), int(n_atoms_conv)
