@@ -3,9 +3,9 @@ import torch.nn as nn
 import mdtraj as md
 import torch.optim as optim
 import pytorch_lightning as pl
-from openmm.app import *
-from openmm import *
-from openmm.unit import *
+# from openmm.app import *
+# from openmm import *
+# from openmm.unit import *
 import itertools
 from .utils import *
 

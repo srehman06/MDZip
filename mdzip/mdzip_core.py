@@ -3,12 +3,14 @@ warnings.filterwarnings("ignore")
 
 import os
 import shutil
+import argparse
 import pickle
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
 import pytorch_lightning as pl
-from lightning.pytorch import loggers as pl_loggers
+# from lightning.pytorch import loggers as pl_loggers
+from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from sklearn.preprocessing import MinMaxScaler
 import mdtraj as md
@@ -26,6 +28,20 @@ set_seed()
 #                  T R A I N                  
 # -------------------------------------------- 
 def train(traj:str, top:str, stride:int=1, out:str=os.getcwd(), fname:str='', epochs:int=100, batchSize:int=128, lat:int=20, memmap:bool=False, model_type:str='AE'):
+    r'''
+Train the AutoEncoder model
+-----------------------------
+traj (str) : Path to the trajectory file [netccdf]
+top (str) : Path to the topology file
+stride (int) : Stride to read the trajectory [Default=1]
+out (str) : Output directory to save trained model and logs [Default=current directory]
+fname (str) : Prefix for all generated files [Default='']
+epochs (int) : Number of epochs to train AE model [Default=100]
+batchSize (int) : Batch size for training [Default=128]
+lat (int) : Latent dimension size [Default=20]
+memmap (bool) : Whether to use memory mapping when reading the trajectory [Default=False]
+model_type (str) : Type of model to use ['AE'|'skipAE'] [Default='AE']
+        '''
     pathExists(traj)
     pathExists(top)
 
@@ -81,6 +97,19 @@ def train(traj:str, top:str, stride:int=1, out:str=os.getcwd(), fname:str='', ep
 #        C O N T I N U E  T R A I N                  
 # -------------------------------------------- 
 def cont_train(traj:str, top:str, model:str, model_type:str, checkpoint:str, stride:int=1, epochs:int=100, batchSize:int=128, memmap:bool=False):
+    r'''
+Continue training the AutoEncoder model from a checkpoint
+-----------------------------
+traj (str) : Path to the trajectory file [netccdf]
+top (str) : Path to the topology file
+model (str) : Path to the trained model file [.pt.xz]
+model_type (str) : Type of model to use ['AE'|'skipAE']
+checkpoint (str) : Path to the checkpoint file [*checkpoint.pt]
+stride (int) : Stride to read the trajectory [Default=1]
+epochs (int) : Number of epochs to continue training AE model [Default=100]
+batchSize (int) : Batch size for training [Default=128]
+memmap (bool) : Whether to use memory mapping when reading the trajectory [Default=False]
+'''
     pathExists(traj); pathExists(top); pathExists(checkpoint)
     accelerator = 'gpu' if torch.cuda.is_available() else 'cpu'
     devices = torch.cuda.device_count() if torch.cuda.is_available() else 1
@@ -147,6 +176,18 @@ def cont_train(traj:str, top:str, model:str, model_type:str, checkpoint:str, str
 #             C O M P R E S S                  
 # -------------------------------------------- 
 def compress(traj:str, top:str, model:str, model_type:str, stride:int=1, out:str|None=None, fname:str|None=None, memmap:bool=False):
+    r'''
+Compress trajectory
+-----------------------------
+traj (str) : Path to the trajectory file [netccdf]
+top (str) : Path to the topology file
+model (str) : Path to the trained model file [.pt.xz]
+model_type (str) : Type of model to use ['AE'|'skipAE']
+stride (int) : Stride to read the trajectory [Default=1]
+out (str) : Output directory to save compressed latents [Default=directory of model]
+fname (str) : Prefix for the compressed latent file [Default=derived from model name]
+memmap (bool) : Whether to use memory mapping when reading the trajectory [Default=False]
+'''
     import io, lzma
 
     pathExists(traj); pathExists(top); pathExists(model)
@@ -221,6 +262,16 @@ def compress(traj:str, top:str, model:str, model_type:str, stride:int=1, out:str
 #            D E C O M P R E S S                  
 # -------------------------------------------- 
 def decompress(top:str, model:str, compressed:str, out:str, model_type:str, scaler:str):
+    r'''
+Decompress latents to trajectory
+-----------------------------
+top (str) : Path to the topology file
+model (str) : Path to the trained model file [.pt.xz]
+compressed (str) : Path to the compressed latent file [.pt.xz]
+out (str) : Output trajectory file path [.nc|.xtc]
+model_type (str) : Type of model to use ['AE'|'skipAE']
+scaler (str) : Path to the saved scaler file [.pkl]
+    '''
     import io, lzma
 
     pathExists(top); pathExists(model); pathExists(compressed); pathExists(os.path.dirname(out))
@@ -268,3 +319,70 @@ def decompress(top:str, model:str, compressed:str, out:str, model_type:str, scal
                 f.write(np_traj_frame*10)
 
     print('\nDecompression complete\n')
+    
+###########################################
+
+def _build_parser():
+    p = argparse.ArgumentParser(prog="mdzip", description="MDZip CLI", allow_abbrev=True)
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    # train
+    t = sub.add_parser("train", help="Train")
+    t.add_argument("-t", "--traj", required=True, type=str, help="Path to trajectory file (str)")
+    t.add_argument("-T", "--top", required=True, type=str, help="Path to topology file (str)")
+    t.add_argument("-s", "--stride", type=int, default=1, help="Stride to read trajectory (int) [default=1]")
+    t.add_argument("-o", "--out", default=os.getcwd(), type=str, help="Output directory to save trained model and logs (str) [default=current directory]")
+    t.add_argument("-f", "--fname", default="", type=str, help="Prefix for all generated files (str) [default='']")
+    t.add_argument("-e", "--epochs", type=int, default=100, help="Number of epochs to train AE model (int) [default=100]")
+    t.add_argument("-b", "--batch-size", type=int, default=128, dest="batchSize", help="Batch size for training (int) [default=128]")
+    t.add_argument("-l", "--lat", type=int, default=20, help="Latent dimension size (int) [default=20]")
+    t.add_argument("-M", "--memmap", action="store_true", help="Use memory mapping when reading the trajectory")
+    t.add_argument("-A", "--model-type", choices=["AE", "skipAE"], default="AE", help="Type of model to use ['AE'|'skipAE'] [default='AE']")
+
+    # cont_train
+    c = sub.add_parser("cont_train", help="Continue training")
+    c.add_argument("-t", "--traj", required=True, type=str, help="Path to trajectory file (str)")
+    c.add_argument("-T", "--top", required=True, type=str, help="Path to topology file (str)")
+    c.add_argument("-m", "--model", default="", type=str, help="Path to trained model file (.pt.xz) (str)")
+    c.add_argument("-A", "--model-type", choices=["AE", "skipAE"], required=True, help="Type of model to use")
+    c.add_argument("-c", "--checkpoint", required=True, type=str, help="Path to checkpoint file (.pt) (str)")
+    c.add_argument("-s", "--stride", type=int, default=1, help="Stride to read trajectory (int) [default=1]")
+    c.add_argument("-e", "--epochs", type=int, default=100, help="Number of epochs to continue training AE model (int) [default=100]")
+    c.add_argument("-b", "--batch-size", type=int, default=128, dest="batchSize", help="Batch size for training (int) [default=128]")
+    c.add_argument("-M", "--memmap", action="store_true", help="Use memory mapping when reading the trajectory")
+
+    # compress
+    x = sub.add_parser("compress", help="Compress to latents")
+    x.add_argument("-t", "--traj", required=True, type=str, help="Path to trajectory file (str)")
+    x.add_argument("-T", "--top", required=True, type=str, help="Path to topology file (str)")
+    x.add_argument("-m", "--model", required=True, type=str, help="Path to trained model file (.pt.xz) (str)")
+    x.add_argument("-A", "--model-type", choices=["AE", "skipAE"], required=True, help="Type of model to use")
+    x.add_argument("-s", "--stride", type=int, default=1, help="Stride to read trajectory (int) [default=1]")
+    x.add_argument("-o", "--out", default=None, type=str, help="Output directory to save compressed latents (str) [default=directory of model]")
+    x.add_argument("-f", "--fname", default=None, type=str, help="Prefix for the compressed latent file (str) [default=derived from model name]")
+    x.add_argument("-M", "--memmap", action="store_true", help="Use memory mapping when reading the trajectory")
+
+    # decompress
+    d = sub.add_parser("decompress", help="Decompress latents")
+    d.add_argument("-T", "--top", required=True, type=str, help="Path to topology file (str)")
+    d.add_argument("-m", "--model", required=True, type=str, help="Path to trained model file (.pt.xz) (str)")
+    d.add_argument("-z", "--compressed", required=True, type=str, help="Path to compressed latent file (.pt.xz) (str)")
+    d.add_argument("-o", "--out", required=True, type=str, help="Output trajectory file path (.nc|.xtc) (str)")
+    d.add_argument("-A", "--model-type", choices=["AE", "skipAE"], type=str, required=True, help="Type of model to use")
+    d.add_argument("-S", "--scaler", required=True, type=str, help="Path to the saved scaler file (.pkl) (str)")
+
+    return p
+
+def main(argv=None):
+    args = _build_parser().parse_args(argv)
+    if args.cmd == "train":
+        return train(args.traj, args.top, args.stride, args.out, args.fname, args.epochs, args.batchSize, args.lat, args.memmap, args.model_type)
+    if args.cmd == "cont_train":
+        return cont_train(args.traj, args.top, args.model, args.model_type, args.checkpoint, args.stride, args.epochs, args.batchSize, args.memmap)
+    if args.cmd == "compress":
+        return compress(args.traj, args.top, args.model, args.model_type, args.stride, args.out, args.fname, args.memmap)
+    if args.cmd == "decompress":
+        return decompress(args.top, args.model, args.compressed, args.out, args.model_type, args.scaler)
+
+if __name__ == "__main__":
+    main()
