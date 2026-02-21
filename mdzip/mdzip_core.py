@@ -215,13 +215,13 @@ memmap (bool) : Whether to use memory mapping when reading the trajectory [Defau
     traj_ = read_traj(traj_=traj, top_=top, stride=stride, memmap=memmap)
     dl = DataLoader(traj_, batch_size=1, shuffle=False, drop_last=False, num_workers=4)
 
-    encoder = model.model.encoder.to(device)
+    encoder = model.model.to(device)
     latents = []
     with torch.no_grad():
         encoder.eval()
         for batch in tqdm(dl, desc="Compressing "):
             batch = batch.to(device=device, dtype=torch.float32)
-            z = encoder(batch).view(1, -1)
+            z = encoder.encode(batch).view(1, -1)
             latents.append(z.cpu())
 
     Z = torch.cat(latents, dim=0).contiguous()
@@ -286,7 +286,7 @@ scaler (str) : Path to the saved scaler file [.pkl]
     except Exception:
         model = load_lightae_int8(model, model_type=model_type, device=device)
 
-    decoder = model.model.decoder.to(device)
+    decoder = model.model.to(device)
 
     if compressed.endswith('.xz'):
         raw = lzma.decompress(open(compressed, 'rb').read())
@@ -313,7 +313,7 @@ scaler (str) : Path to the saved scaler file [.pkl]
         with traj_file as f:
             for i in tqdm(range(Z.shape[0]), desc='Decompressing '):
                 z_i = Z[i:i+1, :]
-                np_traj_frame = decoder(z_i.to(device)).detach().cpu().numpy()
+                np_traj_frame = decoder.decode(z_i.to(device)).detach().cpu().numpy()
                 np_traj_frame = np_traj_frame.reshape(-1, np_traj_frame.shape[2], 3)
                 np_traj_frame = scaler.inverse_transform(np_traj_frame.reshape(-1, 3)).reshape(np_traj_frame.shape)
                 f.write(np_traj_frame*10)

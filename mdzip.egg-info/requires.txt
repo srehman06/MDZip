@@ -1,0 +1,12 @@
+wheel
+mdtraj
+mdanalysis
+torch
+torchvision
+torchaudio
+pytorch-lightning
+scikit-learn
+numpy
+tqdm
+tensorboardX
+tensorboard

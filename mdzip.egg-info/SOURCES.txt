@@ -1,0 +1,14 @@
+README.md
+setup.py
+mdzip/AE.py
+mdzip/__init__.py
+mdzip/mdzip_core.py
+mdzip/quantize.py
+mdzip/skipAE.py
+mdzip/utils.py
+mdzip.egg-info/PKG-INFO
+mdzip.egg-info/SOURCES.txt
+mdzip.egg-info/dependency_links.txt
+mdzip.egg-info/entry_points.txt
+mdzip.egg-info/requires.txt
+mdzip.egg-info/top_level.txt
